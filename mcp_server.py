@@ -84,6 +84,20 @@ def tool_analyze_products(db_path: str, keyword: Optional[str] = None,
     return report.to_dict()
 
 
+def tool_find_sourcing(db_path: str, keyword: Optional[str] = None,
+                       sell_market: str = "_default",
+                       target_price: Optional[int] = None,
+                       min_margin: int = 1, top: int = 10) -> dict:
+    """되팔기 소싱 기회(같은 상품 최저가 매입→마진)를 계산해 반환."""
+    from src.storage import Database
+    from src.analysis import find_arbitrage
+    with Database(db_path) as db:
+        products = db.fetch(keyword)
+    opps = find_arbitrage(products, sell_market=sell_market,
+                          target_price=target_price, min_margin=min_margin)
+    return {"count": len(opps), "opportunities": [o.to_dict() for o in opps[:top]]}
+
+
 # --- MCP 서버 등록 (mcp 패키지 있을 때만) ---
 
 def build_mcp():
@@ -124,6 +138,15 @@ def build_mcp():
         return tool_analyze_products(
             db_path, keyword or None,
             sourcing_cost or None, target_price or None, market)
+
+    @mcp.tool()
+    def find_sourcing_tool(db_path: str, keyword: str = "",
+                           sell_market: str = "_default", target_price: int = 0,
+                           min_margin: int = 1, top: int = 10) -> dict:
+        """되팔기 소싱 기회(최저가 매입→마진)를 계산한다."""
+        return tool_find_sourcing(
+            db_path, keyword or None, sell_market,
+            target_price or None, min_margin, top)
 
     return mcp
 

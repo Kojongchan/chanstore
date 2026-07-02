@@ -151,6 +151,46 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ sourcing
+def cmd_sourcing(args: argparse.Namespace) -> int:
+    from src.analysis import find_arbitrage
+
+    db_path = Path(args.db)
+    if not db_path.exists():
+        log.error("DB 없음: %s (먼저 collect 하세요)", db_path)
+        return 2
+    with Database(db_path) as db:
+        products = db.fetch(args.keyword)
+    if not products:
+        log.error("분석할 데이터가 없습니다. (keyword=%r)", args.keyword)
+        return 1
+
+    opps = find_arbitrage(
+        products, sell_market=args.sell_market, target_price=args.target_price,
+        min_margin=args.min_margin, threshold=args.threshold,
+    )
+    if args.json:
+        print(json.dumps([o.to_dict() for o in opps], ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"\n[소싱 기회] '{args.keyword or '(전체)'}'  되팔 마켓={args.sell_market}  "
+          f"— 후보 {len(opps)}건 (마진 높은 순)")
+    if not opps:
+        print("  조건을 만족하는 소싱 기회가 없습니다. (매물 수/마진 임계값 확인)")
+        return 0
+    for i, o in enumerate(opps[:args.top], start=1):
+        m = o.margin
+        rate = f"{m['margin_rate']:.1%}" if m["margin_rate"] is not None else "-"
+        print(f"\n {i}. {o.name[:50]}  (매물 {o.listings} / 마켓 {','.join(o.sources)})")
+        print(f"    매입 {o.buy['total']:,}원 [{o.buy['source']}·{o.buy['seller'][:14]}]  →  "
+              f"되팔 {o.sell_ref['total']:,}원({o.sell_ref['basis']})  | 차액 {o.spread:,}")
+        print(f"    마진 {m['margin']:,}원({rate})  = 되팔가 - 수수료 {m['fee']:,} - 부가세 {m['vat']:,} - 매입 {m['cost']:,}")
+        if o.buy["url"]:
+            print(f"    매입처: {o.buy['url']}")
+    print("\n  ※ 매입가 = 수집된 전 마켓 최저가. 실제 재고/정품/A·S는 매입 전 확인 필요.")
+    return 0
+
+
 # ------------------------------------------------------------------ detail
 def cmd_detail(args: argparse.Namespace) -> int:
     from src.ai import build_detail_page, export_for_market
@@ -257,6 +297,18 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--market", default="_default", help="수수료율 기준 마켓")
     a.add_argument("--json", action="store_true")
     a.set_defaults(func=cmd_analyze)
+
+    so = sub.add_parser("sourcing", help="되팔기 소싱 기회(최저가 매입→마진)")
+    so.add_argument("--db", default="output/chanstore.db")
+    so.add_argument("--keyword", default=None, help="특정 키워드만(미지정 시 전체)")
+    so.add_argument("--sell-market", default="_default", help="되팔 마켓(수수료율 기준)")
+    so.add_argument("--target-price", type=int, default=None,
+                    help="되팔 목표가(미지정 시 클러스터 중앙값)")
+    so.add_argument("--min-margin", type=int, default=1, help="이 마진 미만은 제외(원)")
+    so.add_argument("--threshold", type=float, default=0.5, help="상품 매칭 유사도 임계값")
+    so.add_argument("--top", type=int, default=10, help="상위 N건 표시")
+    so.add_argument("--json", action="store_true")
+    so.set_defaults(func=cmd_sourcing)
 
     d = sub.add_parser("detail", help="AI 상세페이지 생성")
     d.add_argument("--input", required=True, help="상품 스펙 JSON")

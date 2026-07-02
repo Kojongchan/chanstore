@@ -15,6 +15,14 @@ from .metrics import (
     competition_strength,
     analyze_keyword,
 )
+from .sourcing import (
+    tokenize,
+    token_set,
+    jaccard,
+    group_similar,
+    find_arbitrage,
+    Opportunity,
+)
 
 __all__ = [
     "MARKET_FEE_RATES",
@@ -24,4 +32,10 @@ __all__ = [
     "detect_hot_deals",
     "competition_strength",
     "analyze_keyword",
+    "tokenize",
+    "token_set",
+    "jaccard",
+    "group_similar",
+    "find_arbitrage",
+    "Opportunity",
 ]
