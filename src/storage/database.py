@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
     sourcing_cost     INTEGER,
     estimated_margin  INTEGER,
     image_url         TEXT,
+    image_path        TEXT,
     product_url       TEXT,
     seller            TEXT,
     review_count      INTEGER,

@@ -29,7 +29,7 @@ from pathlib import Path
 
 from src.schema import Product
 from src.sources import SOURCE_CODES, SourceError, build_source
-from src.storage import Database, save_xlsx
+from src.storage import Database, ThumbnailStore, save_xlsx
 
 log = logging.getLogger("chanstore")
 
@@ -53,7 +53,12 @@ def cmd_collect(args: argparse.Namespace) -> int:
         log.error("사용 가능한 소스가 없습니다. (키 설정 또는 --sources 확인)")
         return 2
 
-    total = inserted = updated = 0
+    # 메인 썸네일 저장(참고용). 판매용 이미지(images/)와 분리된 ref_images/ 에 저장.
+    thumb_store = None
+    if args.save_thumbs:
+        thumb_store = ThumbnailStore(Path(args.thumb_dir))
+
+    total = inserted = updated = thumbs = 0
     with Database(db_path) as db:
         for keyword in args.keywords:
             kw_products: list[Product] = []
@@ -70,6 +75,11 @@ def cmd_collect(args: argparse.Namespace) -> int:
                 log.warning("[결과없음] '%s'", keyword)
                 continue
 
+            if thumb_store is not None:
+                n = thumb_store.save_all(kw_products)
+                thumbs += n
+                log.info("[썸네일] '%s': %d장 저장(참고용) → %s", keyword, n, args.thumb_dir)
+
             safe = "".join(c for c in keyword if c.isalnum() or c in " _-").strip()
             xlsx = outdir / f"결과_{safe}_{date.today():%Y%m%d}.xlsx"
             save_xlsx(kw_products, xlsx)
@@ -84,6 +94,8 @@ def cmd_collect(args: argparse.Namespace) -> int:
     log.info("\n===== 수집 요약 =====")
     log.info("총 수집 %d건 (신규 %d/갱신 %d) | DB 누적 %d (%s)",
              total, inserted, updated, db_total, db_path)
+    if thumb_store is not None:
+        log.info("썸네일 저장(참고용) %d장 → %s", thumbs, args.thumb_dir)
     return 0 if total else 1
 
 
@@ -230,6 +242,10 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--page-size", type=int, default=40)
     c.add_argument("--delay", type=float, default=0.5)
     c.add_argument("--outdir", default="output")
+    c.add_argument("--save-thumbs", action="store_true",
+                   help="메인 썸네일을 내려받아 참고용으로 저장(ref_images/)")
+    c.add_argument("--thumb-dir", default="output/ref_images",
+                   help="썸네일 저장 폴더(참고용, 판매용과 분리)")
     c.set_defaults(func=cmd_collect)
 
     a = sub.add_parser("analyze", help="수집 DB 분석")

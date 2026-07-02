@@ -2,5 +2,6 @@
 
 from .database import Database
 from .excel import save_xlsx
+from .images import ThumbnailStore
 
-__all__ = ["Database", "save_xlsx"]
+__all__ = ["Database", "save_xlsx", "ThumbnailStore"]

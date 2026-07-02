@@ -22,7 +22,10 @@ class Product:
     # --- 핵심 사실 데이터 ---
     name: str = ""                  # 상품명
     price: Optional[int] = None     # 대표 판매가(원). 숫자화 실패 시 None
-    image_url: str = ""             # 이미지 URL (참고용 표시까지만. 재사용 금지 — PROJECT.md 2-1)
+    image_url: str = ""             # 이미지 URL(원본)
+    # 내려받아 저장한 메인 썸네일의 로컬 경로. **분석 참고용** 저장소(ref_images/)에만 둔다.
+    # 판매용 재가공/재사용은 별개 판단(PLATFORM_PLAN.md §5) — 판매 자산은 AI 신규 생성/소싱처 제공분.
+    image_path: str = ""
     product_url: str = ""           # 상품 상세 URL
     seller: str = ""                # 판매자/스토어명
     review_count: Optional[int] = None
@@ -76,6 +79,7 @@ COLUMNS: list[str] = [
     "sourcing_cost",
     "estimated_margin",
     "image_url",
+    "image_path",
     "product_url",
     "seller",
     "review_count",

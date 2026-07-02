@@ -27,9 +27,12 @@ cp .env.example .env      # 있는 키만 채우면 됨 (없으면 해당 기능
 ### 1) collect — 여러 마켓에서 수집
 ```bash
 python main.py collect 햇반 즉석밥 --sources 11st,naver --pages 2
+python main.py collect 햇반 --sources 11st,naver --save-thumbs   # 메인 썸네일도 저장
 ```
 - 소스: `11st`(API), `naver`(쇼핑 검색 API=스마트스토어 시세 우회), `gmarket`/`auction`(크롤링, 후순위)
 - 키 없는 소스는 자동으로 건너뜁니다. 결과는 `output/결과_<키워드>_<날짜>.xlsx` + `output/chanstore.db`.
+- `--save-thumbs`: 각 상품 **메인 썸네일을 내려받아** `output/ref_images/`(참고용)에 저장하고 `image_path`에 기록.
+  판매용 이미지(`output/images/`, AI 생성)와 저장소를 분리합니다. 재사용은 별개(저작권) 판단.
 
 ### 2) analyze — 수집 데이터 분석
 ```bash
