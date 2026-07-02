@@ -1,97 +1,118 @@
-# chanstore — 위탁판매 시장조사·소싱판단 도구
+# chanstore — 위탁판매 도구 (수집 · 분석 · AI 상세페이지 · AI CS)
 
-국내 오픈마켓의 **공개 상품 데이터(가격·리뷰수 등 사실 정보)**를 수집·분석하여,
-국내 위탁판매의 **소싱·가격 판단**을 돕는 도구입니다.
+국내 오픈마켓의 **공개 상품 데이터**를 수집·분석하고, **AI로 상세페이지·CS를 반자동화**하는
+위탁판매 운영 도구입니다.
 
-전체 노선/제약/로드맵은 [`PROJECT.md`](./PROJECT.md)를 기준으로 합니다.
-데이터수집·AI 상세페이지·AI CS를 아우르는 **플랫폼 전체 기획**은 [`PLATFORM_PLAN.md`](./PLATFORM_PLAN.md)를 참고하세요.
+- 전체 노선/제약/로드맵(수집 노선): [`PROJECT.md`](./PROJECT.md)
+- 플랫폼 전체 기획(3대 기능·크롤링 주의·AI): [`PLATFORM_PLAN.md`](./PLATFORM_PLAN.md)
 
-> **이 저장소의 현재 범위는 1단계 — 11번가 공식 오픈API(ProductSearch) 수집기**입니다.
-> 키워드 → 상품 목록 → 엑셀(.xlsx) + SQLite 저장까지 동작합니다.
+> 설계 철학: **공식 API 우선, 크롤링은 최소·예의바르게**, **AI는 초안까지·발송은 사람이**,
+> **경쟁사 이미지는 참고용까지만·판매 이미지는 AI 신규 생성**. (자세한 근거는 PLATFORM_PLAN.md)
 
 ---
 
 ## 빠른 시작
 
-### 1) 의존성 설치
 ```bash
 pip install -r requirements.txt
+cp .env.example .env      # 있는 키만 채우면 됨 (없으면 해당 기능은 폴백/스킵)
 ```
 
-### 2) API 키 설정
-11번가 판매자 계정에서 오픈API 키를 발급한 뒤:
-```bash
-cp .env.example .env
-# .env 의 ELEVENST_API_KEY= 뒤에 발급받은 키 입력
-```
-
-### 3) 실행
-```bash
-python main.py 햇반                 # '햇반' 2페이지 수집
-python main.py 햇반 즉석밥 --pages 3 # 키워드 여러 개, 3페이지씩
-python main.py 햇반 --outdir output # 저장 폴더 지정
-```
-
-### 결과물
-- `output/결과_<키워드>_<날짜>.xlsx` — 키워드별 엑셀
-- `output/chanstore.db` — SQLite 누적 DB (중복은 자동 UPSERT)
+키가 하나도 없어도 `detail`/`cs`는 **오프라인 폴백**으로 동작합니다(템플릿 카피 + 플레이스홀더 이미지).
 
 ---
 
-## CLI 옵션
-| 옵션 | 기본값 | 설명 |
-|------|--------|------|
-| `keywords` | (필수) | 검색 키워드 1개 이상 |
-| `--pages` | 2 | 키워드당 수집 페이지 수 |
-| `--page-size` | 40 | 페이지당 상품 수 |
-| `--delay` | 0.5 | 호출 간 딜레이(초) |
-| `--outdir` | output | 결과 저장 폴더 |
-| `-v, --verbose` | - | 상세 로그 |
+## CLI (`python main.py <서브커맨드>`)
+
+### 1) collect — 여러 마켓에서 수집
+```bash
+python main.py collect 햇반 즉석밥 --sources 11st,naver --pages 2
+```
+- 소스: `11st`(API), `naver`(쇼핑 검색 API=스마트스토어 시세 우회), `gmarket`/`auction`(크롤링, 후순위)
+- 키 없는 소스는 자동으로 건너뜁니다. 결과는 `output/결과_<키워드>_<날짜>.xlsx` + `output/chanstore.db`.
+
+### 2) analyze — 수집 데이터 분석
+```bash
+python main.py analyze --db output/chanstore.db --keyword 햇반 --sourcing-cost 15000 --market 11st
+```
+- 가격분포·경쟁강도·핫딜 후보를 출력하고, `--sourcing-cost`(소싱처 기준 **원가 입력값**)를 주면 마진을 역산합니다.
+- ⚠ 원가는 오픈마켓에 공개되지 않으므로 크롤링 값이 아니라 **직접 입력**합니다(PLATFORM_PLAN.md §1-1).
+
+### 3) detail — AI 상세페이지
+```bash
+python main.py detail --input product.json --market naver --outdir output
+```
+`product.json` 예시:
+```json
+{"name":"스테인리스 텀블러 500ml","brand":"챈스토어",
+ "features":["이중 진공 보온보냉","식기세척기 사용 가능"],
+ "specs":{"용량":"500ml","재질":"스테인리스 304"}}
+```
+- 카피(LLM/템플릿) + 이미지(nano banana=Gemini/플레이스홀더) → 마켓별 상세 HTML.
+- 과장·허위광고 표현은 자동 검출해 `검토필요`로 표시하고 경고를 출력합니다(표시광고법 리스크).
+
+### 4) cs — AI CS 답변 초안
+```bash
+python main.py cs --text "환불해주세요"
+```
+- 의도 분류 → 스토어 정책 기반 초안. **환불/교환/클레임·개인정보·금액**이 걸리면 `needs_human` 플래그로
+  자동발송을 막습니다(human-in-the-loop).
 
 ---
 
-## 수집 필드
-상품명 · 판매가 · 이미지URL · 상품URL · 판매자 · 리뷰수 · 평점 · 카테고리 · 순위 · 배송 · 수집시각
+## MCP 서버 (상세페이지·CS 자동화)
 
-> ⚠️ **이미지 정책**: 이미지 URL은 **분석 참고용**으로만 저장합니다.
-> 다운로드·재가공·판매용 재사용은 하지 않습니다 (PROJECT.md 2-1).
+```bash
+pip install mcp anthropic google-genai   # 선택
+python mcp_server.py                       # stdio MCP 서버
+```
+노출 도구: `generate_copy` · `generate_detail_image`(nano banana) · `build_detail_page` ·
+`draft_cs_reply` · `analyze_products`. 핵심 로직은 `mcp_server.py`의 `tool_*` 순수 함수라
+mcp 없이도 import 해서 쓸 수 있습니다.
 
 ---
 
 ## 프로젝트 구조
 ```
 chanstore/
-├── main.py                 # CLI 진입점 (수집 → 정규화 → 저장 파이프라인)
+├── main.py                 # 통합 CLI (collect/analyze/detail/cs)
+├── mcp_server.py           # MCP 서버 + tool_* 순수 함수
 ├── src/
-│   ├── schema.py           # 공통 데이터 스키마 (Product dataclass) — 모든 소스 공유
-│   ├── config.py           # .env 키 로딩
-│   ├── sources/
-│   │   ├── base.py         # 소스 공통 인터페이스 (BaseSource)
-│   │   └── elevenst.py     # 11번가 API 모듈 (EUC-KR/CP949 처리 포함)
-│   └── storage/
-│       ├── database.py     # SQLite 저장 (복합키 UPSERT 중복처리)
-│       └── excel.py        # xlsx 저장
-└── tests/
-    └── test_elevenst.py    # 인코딩 파싱 / 중복처리 테스트 (네트워크 불필요)
+│   ├── schema.py           # 공통 Product 스키마(가격세부·원가·마진 필드 포함)
+│   ├── config.py           # .env 키 로딩(11번가·네이버·Anthropic·Gemini)
+│   ├── crawl/              # 매너 크롤링 코어
+│   │   ├── ratelimit.py    #   도메인별 랜덤 지터 딜레이
+│   │   ├── robots.py       #   robots.txt 준수
+│   │   ├── breaker.py      #   서킷 브레이커(403/429/캡차 감지 시 중단)
+│   │   └── fetcher.py      #   예의바른 HTTP 페처(재시도·백오프)
+│   ├── sources/            # 소스별 독립 모듈 (하나 죽어도 나머지 동작)
+│   │   ├── elevenst.py     #   11번가 API
+│   │   ├── naver.py        #   네이버 쇼핑 검색 API
+│   │   ├── gmarket.py / auction.py  # 크롤러(JSON-LD 우선 파싱)
+│   │   └── crawler_base.py #   크롤러 공통 베이스
+│   ├── analysis/metrics.py # 가격분포·마진역산·핫딜·경쟁강도
+│   ├── ai/                 # 상세페이지: llm·image·compliance·copy·detail_page
+│   ├── cs/                 # CS: classify·knowledge·draft (human-in-the-loop)
+│   └── storage/            # SQLite + xlsx
+└── tests/                  # 네트워크 없는 단위테스트
 ```
-
-설계 원칙: **소스별 모듈 독립**. 2단계 네이버, 5단계 크롤러는 `BaseSource`를 상속해
-`search()`만 구현하면 동일 파이프라인에 끼워집니다. 하나가 깨져도 나머지는 동작합니다.
 
 ---
 
 ## 테스트
 ```bash
-python tests/test_elevenst.py        # 단독 실행
-# 또는
-pytest tests/                        # pytest 사용 시
+python -m pytest tests/          # 전체
+python tests/test_analysis.py    # 개별 실행도 가능
 ```
+모든 테스트는 네트워크·API 키 없이 동작합니다.
 
 ---
 
-## 로드맵 (PROJECT.md)
-- [x] **1단계** — 11번가 공식 API 수집기
-- [ ] 2단계 — 네이버 쇼핑 API 추가
-- [ ] 3단계 — 분석 레이어 (가격분포·마진역산·핫딜·경쟁강도)
-- [ ] 4단계 — AI 텍스트 가공 모듈
-- [ ] 5단계 — 지마켓·옥션 크롤링
+## 로드맵 (PLATFORM_PLAN.md §9)
+- [x] 1단계 — 11번가 API 수집기
+- [x] 2단계 — 네이버 쇼핑 API (스마트스토어 시세 포함)
+- [x] 3단계 — 분석 레이어(가격분포·마진역산·핫딜·경쟁강도)
+- [x] 4단계 — 지마켓·옥션 크롤러(매너 크롤링 규칙 적용)
+- [x] 5단계 — AI 상세페이지 MCP(카피 + nano banana + 마켓별 export)
+- [x] 6단계 — AI CS(human-in-the-loop)
+- [ ] 7단계(선택) — 로컬 대시보드 / 소싱처 원가 연동

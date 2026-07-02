@@ -21,13 +21,26 @@ class Product:
 
     # --- 핵심 사실 데이터 ---
     name: str = ""                  # 상품명
-    price: Optional[int] = None     # 판매가(원). 숫자화 실패 시 None
+    price: Optional[int] = None     # 대표 판매가(원). 숫자화 실패 시 None
     image_url: str = ""             # 이미지 URL (참고용 표시까지만. 재사용 금지 — PROJECT.md 2-1)
     product_url: str = ""           # 상품 상세 URL
     seller: str = ""                # 판매자/스토어명
     review_count: Optional[int] = None
     rating: Optional[float] = None  # 평점
     category: str = ""              # 카테고리(제공 시)
+
+    # --- 가격 세부 (경쟁 가격 인텔리전스) ---
+    list_price: Optional[int] = None    # 정상가
+    sale_price: Optional[int] = None    # 할인가
+    coupon_price: Optional[int] = None  # 쿠폰 적용가(제공 시)
+    shipping_fee: Optional[int] = None  # 배송비(원). 무료면 0
+
+    # --- 마진 판단용 (크롤링 값 아님. 소싱처 입력/분석 계산) ---
+    # PLATFORM_PLAN.md 1-1: '원가'는 오픈마켓에 공개되지 않는다.
+    # sourcing_cost 는 소싱처(도매매·온채널 등)에서 채우는 별도 입력값이며,
+    # estimated_margin 은 분석 레이어가 계산한다. 수집 소스는 이 두 필드를 건드리지 않는다.
+    sourcing_cost: Optional[int] = None      # 매입원가(수동/소싱처 연동)
+    estimated_margin: Optional[int] = None   # 추정 마진(분석 레이어 계산값)
 
     # --- 순위/메타 ---
     rank: Optional[int] = None      # 수집 시점의 노출 순번
@@ -56,6 +69,12 @@ COLUMNS: list[str] = [
     "keyword",
     "name",
     "price",
+    "list_price",
+    "sale_price",
+    "coupon_price",
+    "shipping_fee",
+    "sourcing_cost",
+    "estimated_margin",
     "image_url",
     "product_url",
     "seller",

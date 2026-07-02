@@ -1,11 +1,23 @@
+# --- 필수 (수집/저장) ---
 # HTTP 클라이언트
 httpx>=0.27,<1.0
-
 # .env 설정 로딩
 python-dotenv>=1.0
-
 # 엑셀(.xlsx) 저장
 openpyxl>=3.1
+
+# --- 크롤링 (지마켓·옥션 파싱) ---
+# JSON-LD가 없을 때의 CSS 셀렉터 폴백 파싱에 사용. 없으면 JSON-LD 경로만 동작.
+beautifulsoup4>=4.12
+
+# --- AI 상세페이지 / CS (선택: 키가 있을 때만 실제 호출) ---
+# 텍스트 LLM (Claude). 미설치 시 자동으로 오프라인 템플릿 폴백.
+# anthropic>=0.40
+# 이미지(nano banana = Gemini) + Gemini 텍스트.
+# google-genai>=0.3
+
+# --- MCP 서버 (선택) ---
+# mcp>=1.0
 
 # (선택) 더 빠른 XML 파서 — 없으면 표준 xml.etree 사용
 # lxml>=5.0
