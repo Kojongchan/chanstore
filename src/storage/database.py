@@ -87,6 +87,24 @@ class Database:
     def count(self) -> int:
         return self.conn.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0]
 
+    def stats(self) -> dict:
+        """대시보드용 요약: 총계, 소스별/키워드별 건수."""
+        cur = self.conn.cursor()
+        total = cur.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0]
+        by_source = dict(cur.execute(
+            f"SELECT source, COUNT(*) FROM {TABLE} GROUP BY source ORDER BY 2 DESC"
+        ).fetchall())
+        by_keyword = dict(cur.execute(
+            f"SELECT keyword, COUNT(*) FROM {TABLE} GROUP BY keyword ORDER BY 2 DESC"
+        ).fetchall())
+        return {"total": total, "by_source": by_source, "by_keyword": by_keyword}
+
+    def keywords(self) -> list[str]:
+        rows = self.conn.execute(
+            f"SELECT DISTINCT keyword FROM {TABLE} ORDER BY keyword"
+        ).fetchall()
+        return [r[0] for r in rows if r[0]]
+
     def fetch(self, keyword: str | None = None) -> list[Product]:
         """저장된 상품을 Product 리스트로 읽는다(분석 레이어용). keyword로 필터 가능."""
         cols = ", ".join(COLUMNS)

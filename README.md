@@ -63,6 +63,20 @@ python main.py cs --text "환불해주세요"
 
 ---
 
+## 로컬 대시보드 (웹 UI)
+
+CLI 대신 한 화면에서 수집현황·분석·소싱·상세페이지·CS를 씁니다. **키 없이도 전부 동작**합니다.
+```bash
+pip install fastapi uvicorn
+python dashboard.py                                  # http://127.0.0.1:8000
+CHANSTORE_DB=output/chanstore.db python dashboard.py # DB 경로 지정
+```
+- `/products` 수집 상품(썸네일 포함) · `/analyze` 가격분포·마진 · `/sourcing` 되팔기 기회
+- `/detail` 상세페이지 생성 · `/cs` CS 초안 · `/thumb` 참고용 썸네일(경로 보안 처리)
+- 렌더링 로직은 `src/web/views.py`(순수 함수)라 FastAPI 없이도 테스트됩니다.
+
+---
+
 ## MCP 서버 (상세페이지·CS 자동화)
 
 ```bash
@@ -118,4 +132,6 @@ python tests/test_analysis.py    # 개별 실행도 가능
 - [x] 4단계 — 지마켓·옥션 크롤러(매너 크롤링 규칙 적용)
 - [x] 5단계 — AI 상세페이지 MCP(카피 + nano banana + 마켓별 export)
 - [x] 6단계 — AI CS(human-in-the-loop)
-- [ ] 7단계(선택) — 로컬 대시보드 / 소싱처 원가 연동
+- [x] 되팔기 소싱 분석 (동일상품 매칭 + 최저가 매입 + 마진) — `sourcing`
+- [x] 로컬 대시보드 (`dashboard.py`)
+- [ ] 다음 — 가격 변동 추적·알림 / 배치 상세·자동 업로드(판매자 API) / 리뷰 트렌드

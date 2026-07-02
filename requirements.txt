@@ -16,6 +16,11 @@ beautifulsoup4>=4.12
 # 이미지(nano banana = Gemini) + Gemini 텍스트.
 # google-genai>=0.3
 
+# --- 로컬 대시보드 (선택) ---
+# 없으면 CLI로만 사용. python dashboard.py 로 웹 UI 실행.
+# fastapi>=0.110
+# uvicorn>=0.29
+
 # --- MCP 서버 (선택) ---
 # mcp>=1.0
 
