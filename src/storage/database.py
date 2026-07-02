@@ -8,6 +8,7 @@ from pathlib import Path
 from ..schema import COLUMNS, Product
 
 TABLE = "products"
+HISTORY = "price_history"
 
 # dedup_key = source + product_code → PRIMARY KEY 로 중복 방지
 _CREATE_SQL = f"""
@@ -37,6 +38,19 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
 );
 """
 
+# 가격 이력(append-only): collect 할 때마다 상품 가격 스냅샷을 쌓아 변동을 추적한다.
+_CREATE_HISTORY_SQL = f"""
+CREATE TABLE IF NOT EXISTS {HISTORY} (
+    source        TEXT NOT NULL,
+    product_code  TEXT NOT NULL,
+    keyword       TEXT,
+    name          TEXT,
+    price         INTEGER,
+    snapshot_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_hist ON {HISTORY} (source, product_code, snapshot_at);
+"""
+
 
 class Database:
     """간단한 SQLite 래퍼. with 문으로 사용."""
@@ -46,6 +60,7 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.path))
         self.conn.execute(_CREATE_SQL)
+        self.conn.executescript(_CREATE_HISTORY_SQL)
         self.conn.commit()
 
     def upsert_many(self, products: Iterable[Product]) -> tuple[int, int]:
@@ -86,6 +101,42 @@ class Database:
 
     def count(self) -> int:
         return self.conn.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0]
+
+    def snapshot_prices(self, products: Iterable[Product],
+                        snapshot_at: str | None = None) -> int:
+        """상품들의 현재 가격을 이력 테이블에 한 스냅샷으로 적재. 적재 건수 반환.
+
+        한 번의 collect = 하나의 snapshot_at 로 묶인다(가격 없는 상품은 제외).
+        """
+        from datetime import datetime, timezone
+        ts = snapshot_at or datetime.now(timezone.utc).isoformat()
+        rows = [(p.source, p.product_code, p.keyword, p.name, p.price, ts)
+                for p in products if isinstance(p.price, int)]
+        if rows:
+            self.conn.executemany(
+                f"INSERT INTO {HISTORY} "
+                "(source, product_code, keyword, name, price, snapshot_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            self.conn.commit()
+        return len(rows)
+
+    def fetch_history(self, keyword: str | None = None) -> list[dict]:
+        """가격 이력 행을 (source, product_code, snapshot_at) 순으로 반환."""
+        cols = "source, product_code, keyword, name, price, snapshot_at"
+        if keyword:
+            rows = self.conn.execute(
+                f"SELECT {cols} FROM {HISTORY} WHERE keyword=? "
+                "ORDER BY source, product_code, snapshot_at", (keyword,)
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                f"SELECT {cols} FROM {HISTORY} "
+                "ORDER BY source, product_code, snapshot_at"
+            ).fetchall()
+        keys = ["source", "product_code", "keyword", "name", "price", "snapshot_at"]
+        return [dict(zip(keys, r)) for r in rows]
 
     def stats(self) -> dict:
         """대시보드용 요약: 총계, 소스별/키워드별 건수."""

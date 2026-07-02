@@ -14,6 +14,7 @@ from .image import ImageClient, ImageResult
 from .compliance import scan_ad_text, sanitize_ad_text, BANNED_PHRASES
 from .copy import DetailCopy, generate_copy
 from .detail_page import build_detail_page, export_for_market
+from .batch import generate_batch
 
 __all__ = [
     "LLMClient", "LLMResult",
@@ -21,4 +22,5 @@ __all__ = [
     "scan_ad_text", "sanitize_ad_text", "BANNED_PHRASES",
     "DetailCopy", "generate_copy",
     "build_detail_page", "export_for_market",
+    "generate_batch",
 ]

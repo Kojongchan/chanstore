@@ -84,6 +84,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
             xlsx = outdir / f"결과_{safe}_{date.today():%Y%m%d}.xlsx"
             save_xlsx(kw_products, xlsx)
             ins, upd = db.upsert_many(kw_products)
+            db.snapshot_prices(kw_products)   # 가격 이력 스냅샷(추적용)
             total += len(kw_products)
             inserted += ins
             updated += upd
@@ -191,18 +192,84 @@ def cmd_sourcing(args: argparse.Namespace) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ track
+def cmd_track(args: argparse.Namespace) -> int:
+    from src.analysis import summarize_price_changes, group_by_status
+
+    db_path = Path(args.db)
+    if not db_path.exists():
+        log.error("DB 없음: %s", db_path)
+        return 2
+    with Database(db_path) as db:
+        rows = db.fetch_history(args.keyword)
+    if not rows:
+        log.error("가격 이력이 없습니다. collect를 여러 번 돌리거나 `demo`로 샘플을 넣으세요.")
+        return 1
+
+    changes = summarize_price_changes(rows)
+    by = group_by_status(changes)
+    if args.json:
+        print(json.dumps([c.to_dict() for c in changes], ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"\n[가격변동] '{args.keyword or '(전체)'}'  "
+          f"하락 {len(by['down'])} · 상승 {len(by['up'])} · 동일 {len(by['same'])} · 신규 {len(by['new'])}")
+    if by["down"]:
+        print("\n  ▼ 하락(되팔기/소싱 기회 주목):")
+        for c in by["down"][:args.top]:
+            pct = f"{c.pct:.1%}" if c.pct is not None else "-"
+            print(f"    {c.previous:,} → {c.latest:,}원 ({c.delta:+,}, {pct})  "
+                  f"{c.name[:40]} [{c.source}]")
+    if by["up"]:
+        print("\n  ▲ 상승:")
+        for c in by["up"][:5]:
+            print(f"    {c.previous:,} → {c.latest:,}원 (+{c.delta:,})  {c.name[:40]} [{c.source}]")
+    if by["new"]:
+        print(f"\n  ＋ 신규 진입 {len(by['new'])}건")
+    return 0
+
+
+# ------------------------------------------------------------------ demo
+def cmd_demo(args: argparse.Namespace) -> int:
+    from src.demo import seed
+    Path(args.db).parent.mkdir(parents=True, exist_ok=True)
+    r = seed(args.db)
+    print(f"[완료] 샘플 {r['products']}건 + 스냅샷 {r['snapshots']}회 적재 → {args.db} (누적 {r['db_total']})")
+    print("이제 바로:")
+    print(f"  python main.py analyze  --db {args.db} --keyword 텀블러 --sourcing-cost 9000")
+    print(f"  python main.py sourcing --db {args.db} --keyword 텀블러 --sell-market naver")
+    print(f"  python main.py track    --db {args.db}")
+    print(f"  CHANSTORE_DB={args.db} python dashboard.py   # 웹으로 클릭해 보기")
+    return 0
+
+
 # ------------------------------------------------------------------ detail
 def cmd_detail(args: argparse.Namespace) -> int:
-    from src.ai import build_detail_page, export_for_market
+    from src.ai import build_detail_page, export_for_market, generate_batch
 
     spec = _load_spec(args)
     if spec is None:
         return 2
-    page = build_detail_page(spec, with_images=not args.no_images)
-    exported = export_for_market(page, args.market)
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    # 입력이 리스트면 배치 모드
+    if isinstance(spec, list):
+        results = generate_batch(spec, outdir=outdir / "details",
+                                 market=args.market, with_images=not args.no_images)
+        ok = [r for r in results if r.get("path")]
+        print(f"[배치완료] {len(ok)}/{len(results)}건 생성 → {outdir / 'details'}")
+        for r in results:
+            if r.get("path"):
+                warn = f"  ⚠{len(r['warnings'])}건" if r.get("warnings") else ""
+                print(f"  {r['index']:02d}. {r['name'][:40]} → {Path(r['path']).name}{warn}")
+            else:
+                print(f"  {r['index']:02d}. 실패: {r.get('error')}")
+        return 0 if ok else 1
+
+    page = build_detail_page(spec, with_images=not args.no_images)
+    exported = export_for_market(page, args.market)
     name = "".join(c for c in str(spec.get("name", "detail")) if c.isalnum() or c in " _-").strip() or "detail"
     html_path = outdir / f"상세_{name}.html"
     html_path.write_text(exported["html"], encoding="utf-8")
@@ -310,8 +377,19 @@ def build_parser() -> argparse.ArgumentParser:
     so.add_argument("--json", action="store_true")
     so.set_defaults(func=cmd_sourcing)
 
-    d = sub.add_parser("detail", help="AI 상세페이지 생성")
-    d.add_argument("--input", required=True, help="상품 스펙 JSON")
+    t = sub.add_parser("track", help="가격 변동 추적(이력 스냅샷 비교)")
+    t.add_argument("--db", default="output/chanstore.db")
+    t.add_argument("--keyword", default=None)
+    t.add_argument("--top", type=int, default=10)
+    t.add_argument("--json", action="store_true")
+    t.set_defaults(func=cmd_track)
+
+    dm = sub.add_parser("demo", help="샘플 데이터 적재(키 없이 체험)")
+    dm.add_argument("--db", default="output/chanstore.db")
+    dm.set_defaults(func=cmd_demo)
+
+    d = sub.add_parser("detail", help="AI 상세페이지 생성(입력이 배열이면 배치)")
+    d.add_argument("--input", required=True, help="상품 스펙 JSON(객체=1건, 배열=배치)")
     d.add_argument("--market", default="_default")
     d.add_argument("--outdir", default="output")
     d.add_argument("--no-images", action="store_true", help="이미지 생성 생략")

@@ -23,6 +23,11 @@ from .sourcing import (
     find_arbitrage,
     Opportunity,
 )
+from .tracking import (
+    summarize_price_changes,
+    group_by_status,
+    PriceChange,
+)
 
 __all__ = [
     "MARKET_FEE_RATES",
@@ -38,4 +43,7 @@ __all__ = [
     "group_similar",
     "find_arbitrage",
     "Opportunity",
+    "summarize_price_changes",
+    "group_by_status",
+    "PriceChange",
 ]

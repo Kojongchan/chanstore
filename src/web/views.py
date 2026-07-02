@@ -41,7 +41,8 @@ button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8p
 _NAV = (
     '<header><span class="brand">chanstore</span>'
     '<a href="/">홈</a><a href="/products">상품</a><a href="/analyze">분석</a>'
-    '<a href="/sourcing">소싱</a><a href="/detail">상세페이지</a><a href="/cs">CS</a>'
+    '<a href="/sourcing">소싱</a><a href="/track">가격변동</a>'
+    '<a href="/detail">상세페이지</a><a href="/cs">CS</a>'
     "</header>"
 )
 
@@ -181,6 +182,48 @@ def render_sourcing(opps: Optional[list], keyword: str, sell_market: str) -> str
             f'<div class="muted">기회 {len(opps)}건 · 매입가=수집 전 마켓 최저가</div>' + "".join(cards) +
             '<div class="warn">매입 전 실제 재고·정품·A/S를 확인하세요. 되팔기는 판매자 책임·마켓 약관 리스크가 있습니다.</div>')
     return page("소싱", body)
+
+
+# ------------------------------------------------------------------ 가격변동
+def render_tracking(changes: Optional[list], keyword: str) -> str:
+    form = (
+        f'<form method="get" action="/track">'
+        f'<label>키워드 <input name="keyword" value="{html.escape(keyword)}"></label>'
+        "<button>변동 조회</button></form>"
+    )
+    if changes is None:
+        return page("가격변동", "<h1>가격 변동</h1>" + form +
+                    '<div class="card muted">collect를 여러 번 돌리면 스냅샷이 쌓입니다. '
+                    "샘플은 <code>python main.py demo</code>.</div>")
+    if not changes:
+        return page("가격변동", "<h1>가격 변동</h1>" + form +
+                    '<div class="card muted">이력이 없습니다.</div>')
+    rows = []
+    for c in changes:
+        if c["status"] == "down":
+            badge, cls = "▼ 하락", "ok"
+        elif c["status"] == "up":
+            badge, cls = "▲ 상승", "bad"
+        elif c["status"] == "new":
+            badge, cls = "＋ 신규", "muted"
+        else:
+            badge, cls = "= 동일", "muted"
+        prev = _won(c["previous"]) if c["previous"] is not None else "-"
+        delta = f'{c["delta"]:+,}' if c["delta"] is not None else "-"
+        pct = f'{c["pct"]:.1%}' if c["pct"] is not None else "-"
+        rows.append(
+            f'<tr><td class="{cls}">{badge}</td><td>{html.escape(c["name"][:50])}</td>'
+            f'<td>{html.escape(c["source"])}</td><td class="num">{prev}</td>'
+            f'<td class="num">{_won(c["latest"])}</td><td class="num">{delta}</td>'
+            f'<td class="num">{pct}</td></tr>'
+        )
+    table = ("<table><thead><tr><th>변동</th><th>상품</th><th>소스</th>"
+             "<th class='num'>이전</th><th class='num'>현재</th>"
+             "<th class='num'>차액</th><th class='num'>%</th></tr></thead>"
+             f"<tbody>{''.join(rows)}</tbody></table>")
+    body = ("<h1>가격 변동</h1>" + form +
+            f'<div class="card"><div class="muted">하락 폭 큰 순</div>{table}</div>')
+    return page("가격변동", body)
 
 
 # ------------------------------------------------------------------ 상세페이지

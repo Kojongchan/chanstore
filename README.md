@@ -24,6 +24,8 @@ cp .env.example .env      # 있는 키만 채우면 됨 (없으면 해당 기능
 
 ## CLI (`python main.py <서브커맨드>`)
 
+> **키 없이 지금 체험:** `python main.py demo` → 샘플 데이터 적재 후 아래 명령이 바로 동작합니다.
+
 ### 1) collect — 여러 마켓에서 수집
 ```bash
 python main.py collect 햇반 즉석밥 --sources 11st,naver --pages 2
@@ -41,9 +43,17 @@ python main.py analyze --db output/chanstore.db --keyword 햇반 --sourcing-cost
 - 가격분포·경쟁강도·핫딜 후보를 출력하고, `--sourcing-cost`(소싱처 기준 **원가 입력값**)를 주면 마진을 역산합니다.
 - ⚠ 원가는 오픈마켓에 공개되지 않으므로 크롤링 값이 아니라 **직접 입력**합니다(PLATFORM_PLAN.md §1-1).
 
-### 3) detail — AI 상세페이지
+### 2-b) track — 가격 변동 추적
 ```bash
-python main.py detail --input product.json --market naver --outdir output
+python main.py track --db output/chanstore.db --keyword 텀블러
+```
+- collect 할 때마다 가격 스냅샷이 쌓입니다. 최신 vs 직전을 비교해 **하락/상승/신규**를 감지(하락 폭 큰 순).
+- 키 나오면 매일 collect만 자동화하면 그대로 "가격 하락 알림"이 됩니다.
+
+### 3) detail — AI 상세페이지 (단건/배치)
+```bash
+python main.py detail --input product.json --market naver --outdir output   # 단건
+python main.py detail --input specs.json  --market naver                     # 배열이면 배치
 ```
 `product.json` 예시:
 ```json
@@ -134,4 +144,5 @@ python tests/test_analysis.py    # 개별 실행도 가능
 - [x] 6단계 — AI CS(human-in-the-loop)
 - [x] 되팔기 소싱 분석 (동일상품 매칭 + 최저가 매입 + 마진) — `sourcing`
 - [x] 로컬 대시보드 (`dashboard.py`)
-- [ ] 다음 — 가격 변동 추적·알림 / 배치 상세·자동 업로드(판매자 API) / 리뷰 트렌드
+- [x] 가격 변동 추적 (`track`) · 배치 상세페이지 (`detail` 배열) · 데모 시더 (`demo`)
+- [ ] 키 필요 — 매일 자동수집·알림 발송 / 마켓 자동 업로드(판매자 API) / 리뷰 트렌드

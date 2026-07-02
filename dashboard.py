@@ -102,6 +102,19 @@ def build_app():
         )
         return views.render_sourcing([o.to_dict() for o in opps], keyword, sell_market)
 
+    @app.get("/track", response_class=HTMLResponse)
+    def track(request: Request):
+        from src.analysis import summarize_price_changes
+        from src.storage import Database
+        q = request.query_params
+        keyword = q.get("keyword", "")
+        if not Path(DB_PATH).exists():
+            return views.render_tracking([], keyword)
+        with Database(DB_PATH) as db:
+            rows = db.fetch_history(keyword or None)
+        changes = summarize_price_changes(rows)
+        return views.render_tracking([c.to_dict() for c in changes], keyword)
+
     @app.get("/detail", response_class=HTMLResponse)
     def detail_form():
         return views.render_detail_form()
